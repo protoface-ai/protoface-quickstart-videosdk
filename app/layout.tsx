@@ -4,6 +4,10 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Protoface + VideoSDK Starter',
   description: 'A realtime Protoface avatar starter for VideoSDK AI agents.',
+  icons: {
+    icon: '/protoface-logo.png',
+    apple: '/protoface-logo.png',
+  },
 };
 
 export default function RootLayout({
