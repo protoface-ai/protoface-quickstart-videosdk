@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  logging: {
+    browserToTerminal: true
+  }
+};
 
 export default nextConfig;

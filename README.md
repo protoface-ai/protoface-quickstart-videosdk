@@ -1,6 +1,6 @@
 # Protoface Quickstart for VideoSDK AI Agents
 
-This quickstart shows how to run a Protoface avatar in a Next.js app with a VideoSDK AI agent.
+This quickstart is the easiest way to serve a Protoface Avatar connected to a VideoSDK AI Agent. Simply follow the steps listed below.
 
 ## About Protoface
 
@@ -12,9 +12,9 @@ Read the docs at [docs.protoface.com](https://docs.protoface.com/?utm_source=git
 
 To see quickstarts for other platforms, visit the [quickstart repo](https://github.com/protoface-ai/protoface-quickstart).
 
-## Usage
+## Get Started
 
-1. Rename `.env.example` to `.env` and paste your Protoface API key, LiveKit secrets, and VideoSDK credentials.
+1. Copy `.env.example` for your local `.env` file and put in your Protoface API key, LiveKit secrets, and VideoSDK credentials.
 
 ```js
 PROTOFACE_API_KEY="PROTOFACE-API-KEY"
@@ -29,14 +29,13 @@ VIDEOSDK_AGENT_VERSION_TAG="" // Optional
 NEXT_PUBLIC_PROTOFACE_AVATAR_ID="av_stock_001" // Optional
 ```
 
-2. Install packages and link the local Protoface client.
+2. Install the needed packages
 
 ```bash
 npm install
-npm link ../protoface-client
 ```
 
-3. Run the app.
+3. Run the dev server and head to [the site](http://localhost:3000)
 
 ```bash
 npm run dev
@@ -55,12 +54,9 @@ The app generates VideoSDK access tokens on the server, starts a VideoSDK room, 
 
 Protoface is the visible and audible avatar output for the experience.
 
-## Characters
+## Avatars
 
-You can swap out the character by finding one that you like in the [Protoface avatar docs](https://docs.protoface.com/guides/avatars?utm_source=github&utm_medium=referral&utm_campaign=github_docs&utm_content=protoface-quickstart-videosdk), or create your own.
+Find avatars you like or create your own on [the Protoface dashboard](https://app.protoface.com?utm_source=github&utm_medium=referral&utm_campaign=github_docs&utm_content=protoface-quickstart-videosdk). Replace the `.env` value for `NEXT_PUBLIC_PROTOFACE_AVATAR_ID` to swap the stock avatar with one of your choosing.
 
-`av_stock_001` `av_stock_002` `av_stock_003` `custom_avatar_id`
+Alternatively, find the API spec for creating, retrieving, and maintaing avatars at [docs.protoface.com](https://docs.protoface.com/guides/avatars?utm_source=github&utm_medium=referral&utm_campaign=github_docs&utm_content=protoface-quickstart-videosdk).
 
-## Deploy on Vercel
-
-An easy way to deploy your avatar interaction is to use the [Vercel Platform](https://vercel.com/new?filter=next.js).

@@ -8,6 +8,7 @@ interface DispatchRequest {
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID().slice(0, 8);
   try {
     const { meetingId } = (await request.json()) as DispatchRequest;
     if (!meetingId) {
@@ -17,6 +18,10 @@ export async function POST(request: Request) {
     const token = createVideoSdkToken({ roomId: meetingId, permissions: ["allow_join", "allow_mod"] });
     const agentId = requireEnv("VIDEOSDK_AGENT_ID");
     const versionTag = process.env.VIDEOSDK_AGENT_VERSION_TAG;
+    console.info(
+      `[videosdk/agent:${requestId}] dispatching`,
+      JSON.stringify({ meetingId, agentId, versionTag: versionTag || null })
+    );
     const response = await fetch("https://api.videosdk.live/v2/agent/dispatch", {
       method: "POST",
       headers: {
@@ -38,6 +43,14 @@ export async function POST(request: Request) {
       throw new Error(extractVideoSdkError(payload) ?? `VideoSDK agent dispatch failed with status ${response.status}.`);
     }
 
+    console.info(
+      `[videosdk/agent:${requestId}] dispatched`,
+      JSON.stringify({
+        meetingId,
+        agentId,
+        dispatchId: typeof payload === "object" && payload ? payload.id ?? payload.sessionId ?? null : null
+      })
+    );
     return NextResponse.json({
       agentId,
       versionTag: versionTag ?? null,
@@ -45,6 +58,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to dispatch VideoSDK agent.";
+    console.error(`[videosdk/agent:${requestId}] failed`, message);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
