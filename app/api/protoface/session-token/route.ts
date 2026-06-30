@@ -12,9 +12,14 @@ interface SessionTokenRequest {
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID().slice(0, 8);
   try {
     const body = (await request.json()) as SessionTokenRequest;
     const avatarId = requireBodyValue("avatarId", body.avatarId);
+    console.info(
+      `[protoface/session:${requestId}] creating`,
+      JSON.stringify({ avatarId, metadata: body.metadata ?? null })
+    );
 
     const protofaceApiKey = requireEnv("PROTOFACE_API_KEY");
     const livekitUrl = requireEnv("LIVEKIT_URL");
@@ -57,6 +62,10 @@ export async function POST(request: Request) {
         ...body.metadata
       }
     });
+    console.info(
+      `[protoface/session:${requestId}] created`,
+      JSON.stringify({ sessionId: session.id, roomName, workerIdentity })
+    );
 
     return NextResponse.json({
       sessionToken: session.id,
@@ -70,22 +79,27 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create session token.";
+    console.error(`[protoface/session:${requestId}] create failed`, message);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
 
 export async function DELETE(request: Request) {
+  const requestId = crypto.randomUUID().slice(0, 8);
   try {
     const { sessionId } = (await request.json()) as { sessionId?: string };
     if (!sessionId) {
       throw new Error("Missing sessionId.");
     }
 
+    console.info(`[protoface/session:${requestId}] ending`, JSON.stringify({ sessionId }));
     const protoface = new ProtofaceApiClient({ apiKey: requireEnv("PROTOFACE_API_KEY") });
     await protoface.endSession(sessionId);
+    console.info(`[protoface/session:${requestId}] ended`, JSON.stringify({ sessionId }));
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to end session.";
+    console.error(`[protoface/session:${requestId}] end failed`, message);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -43,7 +43,7 @@ interface ActiveSession {
   token: string;
   meetingId: string;
   participantId: string;
-  agentId: string;
+  agentId?: string;
   agentVersionTag?: string | null;
   dispatchId?: string | null;
 }
@@ -54,6 +54,7 @@ export default function Home() {
   const protofaceRef = useRef<ProtofaceClient | null>(null);
   const audioCleanupRef = useRef<StopListening | null>(null);
   const cleanupPromiseRef = useRef<Promise<void> | null>(null);
+  const agentDispatchMeetingRef = useRef<string | null>(null);
 
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [state, setState] = useState<SessionState>("idle");
@@ -76,6 +77,7 @@ export default function Home() {
 
     try {
       const videosdk = await createVideoSdkSession();
+      console.info("[app/start] videosdk session created", summarizeVideoSdkSession(videosdk));
       const connection = await createProtofaceConnection({
         avatarId: avatar.protoface_avatarid,
         maxSessionLength: 600,
@@ -85,6 +87,7 @@ export default function Home() {
           meetingId: videosdk.meetingId
         }
       });
+      console.info("[app/start] protoface connection created", summarizeProtofaceConnection(connection));
 
       const protoface = new ProtofaceClient({
         avatarId: connection.avatarId ?? avatar.protoface_avatarid,
@@ -116,17 +119,13 @@ export default function Home() {
 
       await protoface.start();
       protofaceRef.current = protoface;
+      console.info("[app/start] protoface started", { meetingId: videosdk.meetingId });
 
-      const agent = await dispatchVideoSdkAgent(videosdk.meetingId);
-      setActiveSession({
-        ...videosdk,
-        agentId: agent.agentId,
-        agentVersionTag: agent.versionTag,
-        dispatchId: agent.dispatchId
-      });
-      pushEvent("VideoSDK room created and agent dispatched.");
+      setActiveSession(videosdk);
+      pushEvent("VideoSDK room created. Joining before dispatching agent.");
     } catch (startError) {
       const message = normalizeError(startError);
+      console.error("[app/start] failed", startError);
       setError(message);
       pushEvent(`Start failed: ${message}`);
       await endSession("error");
@@ -148,6 +147,35 @@ export default function Home() {
     pushEvent("VideoSDK agent audio connected to Protoface.");
   }
 
+  async function dispatchAgentAfterJoin(meetingId: string) {
+    if (agentDispatchMeetingRef.current === meetingId) {
+      return;
+    }
+    agentDispatchMeetingRef.current = meetingId;
+
+    try {
+      console.info("[app/videosdk] dispatching agent after join", { meetingId });
+      const agent = await dispatchVideoSdkAgent(meetingId);
+      setActiveSession((current) =>
+        current?.meetingId === meetingId
+          ? {
+              ...current,
+              agentId: agent.agentId,
+              agentVersionTag: agent.versionTag,
+              dispatchId: agent.dispatchId
+            }
+          : current
+      );
+      pushEvent("VideoSDK agent dispatched.");
+    } catch (agentError) {
+      const message = normalizeError(agentError);
+      console.error("[app/videosdk] agent dispatch failed", agentError);
+      setError(message);
+      pushEvent(`VideoSDK agent dispatch failed: ${message}`);
+      await endSession("error");
+    }
+  }
+
   async function endSession(nextState: "disconnected" | "error") {
     if (cleanupPromiseRef.current) {
       await cleanupPromiseRef.current;
@@ -163,6 +191,7 @@ export default function Home() {
 
   async function cleanupSession() {
     setMode("idle");
+    agentDispatchMeetingRef.current = null;
     audioCleanupRef.current?.();
     audioCleanupRef.current = null;
     setActiveSession(null);
@@ -231,9 +260,14 @@ export default function Home() {
                 onConnected={() => {
                   setState("connected");
                   setMode("listening");
+                  void dispatchAgentAfterJoin(activeSession.meetingId);
                 }}
                 onDisconnected={() => void endSession("disconnected")}
                 onError={(message) => {
+                  console.error("[app/videosdk] meeting error", {
+                    message,
+                    session: summarizeVideoSdkSession(activeSession)
+                  });
                   if (isTransientVideoSdkStartupError(message)) {
                     pushEvent(`VideoSDK startup retry: ${message}`);
                     return;
@@ -308,6 +342,7 @@ async function createVideoSdkSession() {
   if (!response.ok) {
     throw new Error(payload.error ?? "Failed to create VideoSDK room.");
   }
+  console.info("[api/videosdk/session] response", summarizeVideoSdkSession(payload));
   return payload;
 }
 
@@ -321,6 +356,7 @@ async function dispatchVideoSdkAgent(meetingId: string) {
   if (!response.ok) {
     throw new Error(payload.error ?? "Failed to dispatch VideoSDK agent.");
   }
+  console.info("[api/videosdk/agent] response", payload);
   return payload;
 }
 
@@ -339,6 +375,7 @@ async function createProtofaceConnection(body: {
   if (!response.ok) {
     throw new Error(payload.error ?? "Failed to create Protoface session.");
   }
+  console.info("[api/protoface/session-token] response", summarizeProtofaceConnection(payload));
   return payload;
 }
 
@@ -364,10 +401,17 @@ function createBrowserSessionApi(connection: ProtofaceConnectionResponse) {
       };
     },
     async endSession(sessionId: string) {
-      await fetch("/api/protoface/session-token", {
+      console.info("[api/protoface/session-token] delete request", { sessionId });
+      const response = await fetch("/api/protoface/session-token", {
         method: "DELETE",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ sessionId })
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      console.info("[api/protoface/session-token] delete response", {
+        status: response.status,
+        ok: response.ok,
+        payload
       });
     }
   };
@@ -375,6 +419,64 @@ function createBrowserSessionApi(connection: ProtofaceConnectionResponse) {
 
 function normalizeError(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong.";
+}
+
+function summarizeVideoSdkSession(session: VideoSdkSessionResponse) {
+  return {
+    meetingId: session.meetingId,
+    participantId: session.participantId,
+    token: summarizeJwt(session.token)
+  };
+}
+
+function summarizeProtofaceConnection(connection: ProtofaceConnectionResponse) {
+  return {
+    sessionId: connection.sessionId,
+    roomName: connection.roomName,
+    livekitUrl: connection.livekitUrl,
+    hasParticipantToken: Boolean(connection.participantToken),
+    participantToken: summarizeJwt(connection.participantToken),
+    avatarIdentity: connection.avatarIdentity,
+    expiresAt: connection.expiresAt
+  };
+}
+
+function summarizeJwt(token: string | undefined) {
+  if (!token) {
+    return { present: false };
+  }
+
+  const parts = token.split(".");
+  return {
+    present: true,
+    length: token.length,
+    segments: parts.length,
+    preview: `${token.slice(0, 12)}...${token.slice(-8)}`,
+    payload: parts.length === 3 ? decodeJwtPayload(parts[1]) : null
+  };
+}
+
+function decodeJwtPayload(encodedPayload: string) {
+  try {
+    const payload = JSON.parse(atob(base64UrlToBase64(encodedPayload))) as Record<string, unknown>;
+    return {
+      apikey: typeof payload.apikey === "string" ? `${payload.apikey.slice(0, 8)}...` : payload.apikey,
+      permissions: payload.permissions,
+      version: payload.version,
+      iat: payload.iat,
+      exp: payload.exp,
+      roomId: payload.roomId,
+      participantId: payload.participantId,
+      browserNow: Math.floor(Date.now() / 1000)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function base64UrlToBase64(value: string) {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  return base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
 }
 
 function shortId(value: string | null | undefined) {
