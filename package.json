@@ -14,7 +14,8 @@
     "livekit-server-sdk": "^2.15.5",
     "next": "^16.2.6",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "protoface-client": "^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.6",
